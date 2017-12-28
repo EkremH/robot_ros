@@ -1,6 +1,7 @@
 #include <ros.h>
 #include <ros/time.h>
-#include <sensor_msgs/Range.h>
+#include <sensor_msgs/LaserScan.h>
+#include <math.h>
 
 #include <SR04.h>
 
@@ -79,9 +80,9 @@ void turn(int angle, int power = 64)
 
 // ROS stuff
 ros::NodeHandle  nh;
-sensor_msgs::Range range_msg;
-ros::Publisher pub_range( "ranges", &range_msg);
-// unsigned long range_timer;
+sensor_msgs::LaserScan scan;
+ros::Publisher pub_scan( "laser_scan", &scan);
+const int num_ranges = 3; // number of range sensors 
 
 void setup() {
   //---set pins for motors.
@@ -93,45 +94,57 @@ void setup() {
   pinMode(RIGHT_DIRB,OUTPUT);
 
   // Set up ROS messaging system
+  //nh.getHardware()->SetBaud(500000);
   nh.initNode();
-  nh.advertise(pub_range);
-  //range_timer =  millis();
+  nh.advertise(pub_scan);
 
-  range_msg.radiation_type = sensor_msgs::Range::ULTRASOUND;
-  range_msg.field_of_view = 0.07; // this is in radians = ~4'
-  range_msg.min_range = 0.05;
-  range_msg.max_range = 2.0;
+    // We pretend we have a laser scanner that sans -45 to +45 degrees with 3 measurment points
+    const float radians_for_45_degrees  = PI/4.0;
+    scan.header.frame_id = "laser_frame";
+    scan.angle_min = -radians_for_45_degrees;
+    scan.angle_max = radians_for_45_degrees;
+    scan.angle_increment = radians_for_45_degrees;
+    scan.time_increment = 0.025;    // time btw scans => 25ms fixed
+    scan.range_min = 0.04;
+    scan.range_max = 2.0; 
 }
 
-unsigned long sensor = 0;
+
 
 void loop() {
 
 // Take one reading at a time
 // each measurment takes about 12 + 25ms (due to artifical delay in library)
-  long range = 0;
-  switch (sensor % 3) {
-    case 0: 
-     range = sr_left.Distance();
-     range_msg.header.frame_id =  "L";
-     break;
-     
-    case 1:
-      range = sr_center.Distance();
-      range_msg.header.frame_id =  "C";
-      break;
 
-    case 2:
-      range = sr_right.Distance();
-      range_msg.header.frame_id =  "R";
-     break;
+// local storage becase scan msg uses a pointer and we dont want to alloc!
+  float ranges[num_ranges];
+ 
+  for (int i = 0; i < num_ranges; ++i) 
+  {
+    long range = 0;
+    switch (i % 3) {
+      case 0: 
+       range = sr_left.Distance();
+       break;
+       
+      case 1:
+        range = sr_center.Distance();
+        break;
+  
+      case 2:
+        range = sr_right.Distance();
+       break;
+    }
+
+    ranges[i] = range/100.0;
   }
-  ++sensor;
 
- // publish the reading
-  range_msg.range = range/100.0;
-  range_msg.header.stamp = nh.now();
-  pub_range.publish(&range_msg);
+  scan.header.stamp = nh.now();
+  scan.ranges = ranges;
+  scan.ranges_length = num_ranges;
+  
+   // publish the reading
+  pub_scan.publish(&scan);
 
   nh.spinOnce();
   
