@@ -1,6 +1,7 @@
 #include <ros.h>
 #include <ros/time.h>
 #include <sensor_msgs/LaserScan.h>
+#include <nav_msgs/Odometry.h>
 #include <math.h>
 
 #include <SR04.h>
@@ -81,7 +82,10 @@ void turn(int angle, int power = 64)
 // ROS stuff
 ros::NodeHandle  nh;
 sensor_msgs::LaserScan scan;
-ros::Publisher pub_scan( "laser_scan", &scan);
+ros::Publisher pub_scan("laser_scan", &scan);
+
+//nav_msgs::Odometry odom;
+//ros::Publisher pub_odom("odom", &odom);
 const int num_ranges = 3; // number of range sensors 
 
 void setup() {
@@ -100,7 +104,7 @@ void setup() {
 
     // We pretend we have a laser scanner that sans -45 to +45 degrees with 3 measurment points
     const float radians_for_45_degrees  = PI/4.0;
-    scan.header.frame_id = "laser_frame";
+    scan.header.frame_id = "laser";
     scan.angle_min = -radians_for_45_degrees;
     scan.angle_max = radians_for_45_degrees;
     scan.angle_increment = radians_for_45_degrees;
@@ -109,14 +113,11 @@ void setup() {
     scan.range_max = 2.0; 
 }
 
-
-
-void loop() {
-
-// Take one reading at a time
-// each measurment takes about 12 + 25ms (due to artifical delay in library)
-
-// local storage becase scan msg uses a pointer and we dont want to alloc!
+void publish_sensor_data()
+{
+  // Take one reading at a time
+  // each measurment takes about 12 + 25ms (due to artifical delay in library)
+  // local storage becase scan msg uses a pointer and we dont want to alloc!
   float ranges[num_ranges];
  
   for (int i = 0; i < num_ranges; ++i) 
@@ -145,7 +146,11 @@ void loop() {
   
    // publish the reading
   pub_scan.publish(&scan);
+}
 
+void loop() {
+
+  publish_sensor_data();
   nh.spinOnce();
   
 /* MOTOR CONTROL 
